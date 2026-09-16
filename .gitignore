@@ -1,0 +1,41 @@
+# Gradle artifacts
+.gradle/
+build/
+/*/build/
+
+# IntelliJ IDEA / Android Studio
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Local configuration
+local.properties
+.kotlin/
+
+# Generated files
+/captures/
+.externalNativeBuild/
+.cxx/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Misc
+*.pyc
+*.log
+gha-creds-*.json
+gradle/gradle-daemon-jvm.properties
+
+# Build artifacts
+/app/release/
+app/mapping.txt
+app/seeds.txt
+app/unused.txt
+app/usage.txt
+
+# Temp files
+/temp/
+/scratch/
