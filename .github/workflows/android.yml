@@ -28,14 +28,22 @@ jobs:
     - name: Build with Gradle
       run: ./gradlew assembleDebug
 
+    - name: Get Version
+      id: get_version
+      run: |
+        VERSION_NAME=$(grep "versionName =" app/build.gradle.kts | awk -F'"' '{print $2}')
+        echo "VERSION=$VERSION_NAME" >> $GITHUB_OUTPUT
+        echo "REPO_NAME=${{ github.event.repository.name }}" >> $GITHUB_OUTPUT
+
     - name: Create Release
       uses: softprops/action-gh-release@v2
       if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
       with:
-        tag_name: latest
-        name: Latest Build
+        tag_name: v${{ steps.get_version.outputs.VERSION }}-${{ github.run_number }}
+        name: "${{ steps.get_version.outputs.REPO_NAME }} v${{ steps.get_version.outputs.VERSION }} (Build ${{ github.run_number }})"
         draft: false
         prerelease: false
+        generate_release_notes: true
         files: app/build/outputs/apk/debug/*.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

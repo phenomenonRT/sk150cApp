@@ -22,6 +22,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sk150c.control.R
@@ -279,7 +280,7 @@ fun DashboardScreen(
                                 editingVoltage = false
                             }
                         },
-                        steps = listOf(-1.0, -0.1, 0.1, 1.0),
+                        steps = listOf(-5.0, -1.0, -0.1, 0.1, 1.0, 5.0),
                         unit = "V",
                         format = "%.2f",
                         range = 0f..36f,
@@ -300,7 +301,7 @@ fun DashboardScreen(
                                 editingCurrent = false
                             }
                         },
-                        steps = listOf(-0.1, -0.01, 0.01, 0.1),
+                        steps = listOf(-1.0, -0.1, -0.01, 0.01, 0.1, 1.0),
                         unit = "A",
                         format = "%.3f",
                         range = 0f..5.1f,
@@ -531,7 +532,7 @@ private fun SetpointControl(
                     value = value.replace(',', '.').toFloatOrNull() ?: 0f,
                     onValueChange = { newVal -> onValueChange(format.format(newVal).replace(',', '.')) },
                     range = range,
-                    size = 130.dp,
+                    size = 110.dp,
                     unit = unit,
                     precision = precision,
                     step = knobStep,
@@ -545,59 +546,99 @@ private fun SetpointControl(
                 OutlinedTextField(
                     value = value,
                     onValueChange = onValueChange,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
                     suffix = { Text(unit, style = MaterialTheme.typography.labelSmall) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyMedium,
-                    shape = MaterialTheme.shapes.medium
+                    textStyle = MaterialTheme.typography.titleMedium.copy(
+                        textAlign = TextAlign.Center,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                    )
                 )
                 Button(
                     onClick = onApply,
-                    modifier = Modifier.fillMaxWidth().height(36.dp),
+                    modifier = Modifier.fillMaxWidth().height(42.dp),
                     shape = MaterialTheme.shapes.medium,
                     contentPadding = PaddingValues(horizontal = 8.dp),
                     colors = if (!saveToFlash) ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+                        containerColor = MaterialTheme.colorScheme.error
                     ) else ButtonDefaults.buttonColors()
                 ) {
                     Icon(
-                        if (saveToFlash) Icons.Filled.Check else Icons.Filled.Timer,
+                        if (saveToFlash) Icons.Filled.CheckCircle else Icons.Filled.Timer,
                         contentDescription = null, 
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(20.dp)
                     )
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(6.dp))
                     Text(
-                        if (saveToFlash) stringResource(R.string.btn_apply) else "Temp Apply",
-                        style = MaterialTheme.typography.labelMedium
+                        if (saveToFlash) stringResource(R.string.btn_apply) else "Temp",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
             
             Spacer(Modifier.height(8.dp))
             
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                steps.chunked(2).forEach { rowSteps ->
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        rowSteps.forEach { step ->
-                            val sign = if (step > 0) "+" else ""
-                            FilledTonalButton(
-                                onClick = {
-                                    val current = value.replace(',', '.').toDoubleOrNull() ?: 0.0
-                                    val newVal = (current + step).coerceAtLeast(0.0)
-                                    onValueChange(format.format(newVal).replace(',', '.'))
-                                },
-                                modifier = Modifier.weight(1f),
-                                contentPadding = PaddingValues(0.dp),
-                                shape = MaterialTheme.shapes.medium
-                            ) {
-                                Text("$sign$step", style = MaterialTheme.typography.labelSmall)
-                            }
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                val stepGroups = steps.partition { it < 0 }
+                val minusSteps = stepGroups.first.sortedByDescending { it }
+                val plusSteps = stepGroups.second.sorted()
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        minusSteps.forEach { step ->
+                            StepButton(step, format, value, onValueChange)
+                        }
+                    }
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        plusSteps.forEach { step ->
+                            StepButton(step, format, value, onValueChange)
                         }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun StepButton(
+    step: Double,
+    format: String,
+    currentValue: String,
+    onValueChange: (String) -> Unit
+) {
+    val sign = if (step > 0) "+" else ""
+    val isPlus = step > 0
+    
+    FilledTonalButton(
+        onClick = {
+            val current = currentValue.replace(',', '.').toDoubleOrNull() ?: 0.0
+            val newVal = (current + step).coerceAtLeast(0.0)
+            onValueChange(format.format(newVal).replace(',', '.'))
+        },
+        modifier = Modifier.fillMaxWidth().height(30.dp),
+        contentPadding = PaddingValues(0.dp),
+        shape = MaterialTheme.shapes.small,
+        colors = ButtonDefaults.filledTonalButtonColors(
+            containerColor = if (isPlus) 
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) 
+            else 
+                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+        )
+    ) {
+        Text(
+            "$sign$step", 
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = if (isPlus) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+        )
     }
 }
 
