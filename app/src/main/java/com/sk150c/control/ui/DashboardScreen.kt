@@ -1,6 +1,10 @@
 package com.sk150c.control.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -16,7 +20,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -27,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sk150c.control.R
 import com.sk150c.control.data.AppUiState
+import com.sk150c.control.data.GraphPoint
 import com.sk150c.control.data.MemoryGroup
 import com.sk150c.control.data.ValueDisplayPosition
 import com.sk150c.control.modbus.ProtectStatus
@@ -42,6 +50,7 @@ fun DashboardScreen(
     onOpenBatteryLab: () -> Unit
 ) {
     val reading = state.reading
+    var graphVisible by remember { mutableStateOf(false) }
 
     var vInput by remember { mutableStateOf("%.2f".format(reading.vSet).replace(',', '.')) }
     var iInput by remember { mutableStateOf("%.3f".format(reading.iSet).replace(',', '.')) }
@@ -154,10 +163,11 @@ fun DashboardScreen(
                 }
             }
 
-            // Primary Readouts Card
+            // Primary Readouts Card - Click to expand
             ElevatedCard(
                 modifier = Modifier
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .clickable { graphVisible = !graphVisible },
                 colors = CardDefaults.elevatedCardColors(
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer
@@ -174,6 +184,35 @@ fun DashboardScreen(
                         BigReadout(stringResource(R.string.label_iout), "%.3f".format(reading.iOut), "A", Modifier.weight(1f))
                     }
                     
+                    AnimatedVisibility(
+                        visible = graphVisible,
+                        enter = expandVertically(),
+                        exit = shrinkVertically()
+                    ) {
+                        Column {
+                            Spacer(Modifier.height(16.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                // Voltage Graph Block
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Voltage (V)", style = MaterialTheme.typography.labelSmall, color = Color(0xFF2196F3), fontWeight = FontWeight.Bold)
+                                    Box(modifier = Modifier.fillMaxWidth().height(120.dp).padding(top = 4.dp)) {
+                                        DashboardSingleGraph(state.history, isVoltage = true)
+                                    }
+                                }
+                                // Current Graph Block
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Current (A)", style = MaterialTheme.typography.labelSmall, color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
+                                    Box(modifier = Modifier.fillMaxWidth().height(120.dp).padding(top = 4.dp)) {
+                                        DashboardSingleGraph(state.history, isVoltage = false)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     Spacer(Modifier.height(12.dp))
                     HorizontalDivider(color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.1f))
                     Spacer(Modifier.height(12.dp))
@@ -280,7 +319,7 @@ fun DashboardScreen(
                                 editingVoltage = false
                             }
                         },
-                        steps = listOf(-5.0, -1.0, -0.1, 0.1, 1.0, 5.0),
+                        steps = listOf(-1.0, -0.1, 0.1, 1.0),
                         unit = "V",
                         format = "%.2f",
                         range = 0f..36f,
@@ -301,10 +340,10 @@ fun DashboardScreen(
                                 editingCurrent = false
                             }
                         },
-                        steps = listOf(-1.0, -0.1, -0.01, 0.01, 0.1, 1.0),
+                        steps = listOf(-0.1, -0.01, 0.01, 0.1),
                         unit = "A",
                         format = "%.3f",
-                        range = 0f..5.1f,
+                        range = 0f..8.2f, // Updated to 8.2A based on guide OCP limit
                         roundingEnabled = state.roundingEnabled,
                         valueDisplayPosition = state.valueDisplayPosition,
                         saveToFlash = state.saveToFlash,
@@ -546,13 +585,13 @@ private fun SetpointControl(
                 OutlinedTextField(
                     value = value,
                     onValueChange = onValueChange,
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     suffix = { Text(unit, style = MaterialTheme.typography.labelSmall) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
-                    textStyle = MaterialTheme.typography.titleMedium.copy(
-                        textAlign = TextAlign.Center,
-                        fontWeight = FontWeight.Bold
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
                     ),
                     shape = MaterialTheme.shapes.medium,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -887,13 +926,54 @@ private fun TimeLimitRow(
 }
 
 @Composable
+private fun DashboardSingleGraph(history: List<GraphPoint>, isVoltage: Boolean) {
+    val graphColor = if (isVoltage) Color(0xFF2196F3) else Color(0xFF4CAF50)
+
+    if (history.size < 2) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("...", style = MaterialTheme.typography.labelSmall)
+        }
+        return
+    }
+
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val width = size.width
+        val height = size.height
+
+        val values = if (isVoltage) history.map { it.voltage } else history.map { it.current }
+        val minVal = values.min().toFloat()
+        val maxVal = values.max().toFloat().coerceAtLeast(minVal + 0.1f)
+        
+        val range = maxVal - minVal
+        val stepX = width / (history.size - 1)
+
+        val path = Path().apply {
+            values.forEachIndexed { index, value ->
+                val x = index * stepX
+                val y = height - ((value.toFloat() - minVal) / range * height)
+                if (index == 0) moveTo(x, y) else lineTo(x, y)
+            }
+        }
+        drawPath(path, graphColor, style = Stroke(width = 2.dp.toPx()))
+        
+        // Horizontal baseline
+        drawLine(
+            color = graphColor.copy(alpha = 0.2f),
+            start = Offset(0f, height),
+            end = Offset(width, height),
+            strokeWidth = 1.dp.toPx()
+        )
+    }
+}
+
+@Composable
 private fun BigReadout(label: String, value: String, unit: String, modifier: Modifier = Modifier) {
     Column(horizontalAlignment = Alignment.Start, modifier = modifier) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(value, style = MaterialTheme.typography.headlineLarge.copy(fontSize = 38.sp), fontWeight = FontWeight.ExtraBold)
+            Text(value, style = MaterialTheme.typography.headlineLarge.copy(fontSize = 30.sp), fontWeight = FontWeight.ExtraBold)
             Spacer(Modifier.width(4.dp))
-            Text(unit, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
+            Text(unit, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
         }
     }
 }
@@ -901,7 +981,7 @@ private fun BigReadout(label: String, value: String, unit: String, modifier: Mod
 @Composable
 private fun SmallReadout(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
-        Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
+        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
     }
 }

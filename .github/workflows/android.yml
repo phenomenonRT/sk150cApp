@@ -35,6 +35,10 @@ jobs:
         echo "VERSION=$VERSION_NAME" >> $GITHUB_OUTPUT
         echo "REPO_NAME=${{ github.event.repository.name }}" >> $GITHUB_OUTPUT
 
+    - name: Prepare Artifacts
+      run: |
+        mv app/build/outputs/apk/debug/app-debug.apk "app/build/outputs/apk/debug/sk150cApp v${{ steps.get_version.outputs.VERSION }}.apk"
+
     - name: Create Release
       uses: softprops/action-gh-release@v2
       if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
@@ -44,6 +48,6 @@ jobs:
         draft: false
         prerelease: false
         generate_release_notes: true
-        files: app/build/outputs/apk/debug/*.apk
+        files: "app/build/outputs/apk/debug/*.apk"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

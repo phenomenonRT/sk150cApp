@@ -87,7 +87,14 @@ data class AppUiState(
     val vOutOffset: Double = 0.0,
     val iOutOffset: Double = 0.0,
     val model: String = "",
-    val version: String = ""
+    val version: String = "",
+    val history: List<GraphPoint> = emptyList()
+)
+
+data class GraphPoint(
+    val timestamp: Long,
+    val voltage: Double,
+    val current: Double
 )
 
 @OptIn(InternalSerializationApi::class)
@@ -428,7 +435,9 @@ class PowerSupplyRepository(
 
                     val newReading = decode(allValues)
                     _uiState.update { state ->
-                        state.copy(reading = newReading, message = null, isStale = false)
+                        val newHistory = (state.history + GraphPoint(System.currentTimeMillis(), newReading.vOut, newReading.iOut))
+                            .takeLast(100) // Keep last 100 points
+                        state.copy(reading = newReading, history = newHistory, message = null, isStale = false)
                     }
 
                     // Automation: Stop charging if current is low

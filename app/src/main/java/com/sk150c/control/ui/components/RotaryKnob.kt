@@ -6,6 +6,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -34,10 +35,11 @@ fun RotaryKnob(
     showValue: Boolean = true
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
-    val secondaryColor = MaterialTheme.colorScheme.secondary
     val surfaceColor = MaterialTheme.colorScheme.surfaceVariant
     val onSurfaceColor = MaterialTheme.colorScheme.onSurface
     val labelColor = onSurfaceColor.toArgb()
+    val knobFaceColor = MaterialTheme.colorScheme.surfaceColorAtElevation(4.dp)
+    val knobOutlineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
 
     Canvas(
         modifier = modifier
@@ -84,10 +86,10 @@ fun RotaryKnob(
         val trackMargin = 2.dp.toPx() 
         val trackRadius = fullRadius - trackWidth / 2 - trackMargin
         val tickOuterRadius = trackRadius - trackWidth / 2 - 2.dp.toPx()
-        val majorTickLength = 8.dp.toPx()
-        val minorTickLength = 4.dp.toPx()
-        val labelRadius = tickOuterRadius - majorTickLength - 16.dp.toPx()
-        val knobRadius = labelRadius - 14.dp.toPx()
+        val majorTickLength = 6.dp.toPx()
+        val minorTickLength = 3.dp.toPx()
+        val labelRadius = tickOuterRadius - majorTickLength - 12.dp.toPx()
+        val knobRadius = labelRadius - 16.dp.toPx()
         val pointerWidth = 6.dp.toPx()
 
         // 2. Draw Track (Outer Ring)
@@ -98,7 +100,8 @@ fun RotaryKnob(
             style = Stroke(width = trackWidth)
         )
         
-        val sweepAngle = ((value - range.start) / (range.endInclusive - range.start) * 270f)
+        val clampedValue = value.coerceIn(range)
+        val sweepAngle = ((clampedValue - range.start) / (range.endInclusive - range.start) * 270f)
         drawArc(
             color = primaryColor,
             startAngle = 135f,
@@ -145,13 +148,16 @@ fun RotaryKnob(
                 // Use round to avoid precision issues like 5.0 becoming 4
                 val labelText = Math.round(tickVal.toDouble()).toInt().toString()
                 
+                // Don't draw label 0 and Max too close to each other if range is small
+                // But generally fine for 0-36 and 0-8 range
+                
                 drawContext.canvas.nativeCanvas.drawText(
                     labelText,
                     lx,
-                    ly + 6.dp.toPx(),
+                    ly + 4.dp.toPx(), // Centering correction
                     NativePaint().apply {
                         color = labelColor
-                        textSize = 14.sp.toPx()
+                        textSize = 12.sp.toPx()
                         textAlign = NativePaint.Align.CENTER
                         isAntiAlias = true
                         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
@@ -163,32 +169,17 @@ fun RotaryKnob(
         }
 
         // 4. Draw Knob Body
-        // Shadow/Depth
+        // Flat M3 Knob face
         drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(onSurfaceColor.copy(alpha = 0.15f), Color.Transparent),
-                center = center,
-                radius = knobRadius * 1.05f
-            ),
-            radius = knobRadius * 1.05f,
-            center = center
-        )
-        
-        // Main knob face
-        drawCircle(
-            brush = Brush.linearGradient(
-                colors = listOf(surfaceColor, secondaryColor.copy(alpha = 0.8f)),
-                start = Offset(center.x - knobRadius, center.y - knobRadius),
-                end = Offset(center.x + knobRadius, center.y + knobRadius)
-            ),
+            color = knobFaceColor,
             radius = knobRadius,
             center = center
         )
         
-        // Subtle inner ring for depth
+        // Outline for the knob to make it pop against the surface
         drawCircle(
-            color = onSurfaceColor.copy(alpha = 0.05f),
-            radius = knobRadius * 0.95f,
+            color = knobOutlineColor,
+            radius = knobRadius,
             center = center,
             style = Stroke(width = 1.dp.toPx())
         )
